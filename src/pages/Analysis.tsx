@@ -17,16 +17,23 @@ const Analysis = () => {
   useEffect(() => {
     const fetchAnalysis = async () => {
       try {
-        // Poll for analysis results (background processing)
+        // 최신 분석 결과 1건만 가져오기
         let attempts = 0;
-        const maxAttempts = 30; // 30 seconds max wait
-        
+        const maxAttempts = 5;
+
         while (attempts < maxAttempts) {
           const { data, error } = await supabase
             .from("analysis_results")
             .select("*")
             .eq("application_id", applicationId)
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
+
+          if (error) {
+            console.error("Error fetching analysis:", error);
+            break;
+          }
 
           if (data) {
             setAnalysisData(data);
@@ -34,12 +41,10 @@ const Analysis = () => {
             return;
           }
 
-          // Wait 1 second before trying again
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           attempts++;
         }
 
-        // If no data after max attempts
         setLoading(false);
       } catch (error) {
         console.error("Error fetching analysis:", error);
@@ -80,6 +85,7 @@ const Analysis = () => {
   }
 
   const customerFlow = analysisData.customer_flow || [];
+  const hasCustomerFlow = Array.isArray(customerFlow) && customerFlow.length > 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
@@ -145,21 +151,29 @@ const Analysis = () => {
               <CardTitle>시간대별 고객 유입</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={customerFlow}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                  />
-                  <Bar dataKey="customers" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {hasCustomerFlow ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={customerFlow}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" />
+                    <YAxis stroke="hsl(var(--muted-foreground))" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                    />
+                    <Bar dataKey="customers" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm text-center">
+                  업로드된 데이터에서 시간 정보를 찾지 못해
+                  <br />
+                  시간대별 고객 유입 그래프를 표시할 수 없습니다.
+                </div>
+              )}
             </CardContent>
           </Card>
 
