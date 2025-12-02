@@ -17,17 +17,32 @@ const Analysis = () => {
   useEffect(() => {
     const fetchAnalysis = async () => {
       try {
-        const { data, error } = await supabase
-          .from("analysis_results")
-          .select("*")
-          .eq("application_id", applicationId)
-          .single();
+        // Poll for analysis results (background processing)
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds max wait
+        
+        while (attempts < maxAttempts) {
+          const { data, error } = await supabase
+            .from("analysis_results")
+            .select("*")
+            .eq("application_id", applicationId)
+            .maybeSingle();
 
-        if (error) throw error;
-        setAnalysisData(data);
+          if (data) {
+            setAnalysisData(data);
+            setLoading(false);
+            return;
+          }
+
+          // Wait 1 second before trying again
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          attempts++;
+        }
+
+        // If no data after max attempts
+        setLoading(false);
       } catch (error) {
         console.error("Error fetching analysis:", error);
-      } finally {
         setLoading(false);
       }
     };
