@@ -41,14 +41,14 @@ const Upload = () => {
     const dataToAnalyze = jsonData.slice(0, 1000);
 
     for (const row of dataToAnalyze) {
-      const timeField =
+      let timeField =
         (row["시간"] ||
           row["Time"] ||
           row["시간대"] ||
           row["주문시간"] ||
           row["OrderTime"] ||
           row["timestamp"]) as unknown;
-      const revenueField =
+      let revenueField =
         (row["매출"] ||
           row["Revenue"] ||
           row["금액"] ||
@@ -61,6 +61,28 @@ const Upload = () => {
           row["이용시간"] ||
           row["Duration"] ||
           row["stay_duration"]) as unknown;
+
+      // Fallback: 자동으로 시간/매출 컬럼 탐지
+      if (timeField == null) {
+        for (const value of Object.values(row)) {
+          if (
+            typeof value === "string" &&
+            /\b\d{1,2}:\d{2}\b/.test(value)
+          ) {
+            timeField = value;
+            break;
+          }
+        }
+      }
+
+      if (revenueField == null) {
+        for (const value of Object.values(row)) {
+          if (typeof value === "number") {
+            revenueField = value;
+            break;
+          }
+        }
+      }
 
       if (timeField == null) continue;
 
