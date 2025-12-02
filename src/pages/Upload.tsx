@@ -14,6 +14,18 @@ const Upload = () => {
   const [posFile, setPosFile] = useState<File | null>(null);
   const [cctvFile, setCctvFile] = useState<File | null>(null);
 
+  // Sanitize filename to remove special characters and Korean characters
+  const sanitizeFilename = (filename: string): string => {
+    const extension = filename.split('.').pop();
+    const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
+    // Remove all non-alphanumeric characters except underscores and hyphens
+    const sanitized = nameWithoutExt
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .substring(0, 50); // Limit length
+    return `${sanitized}.${extension}`;
+  };
+
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!posFile || !cctvFile || !applicationId) {
@@ -24,16 +36,18 @@ const Upload = () => {
     setIsUploading(true);
 
     try {
-      // Upload POS file
-      const posPath = `${applicationId}/pos_${Date.now()}_${posFile.name}`;
+      // Upload POS file with sanitized filename
+      const posSafeFilename = sanitizeFilename(posFile.name);
+      const posPath = `${applicationId}/pos_${Date.now()}_${posSafeFilename}`;
       const { error: posError } = await supabase.storage
         .from("cafe-data")
         .upload(posPath, posFile);
 
       if (posError) throw posError;
 
-      // Upload CCTV file
-      const cctvPath = `${applicationId}/cctv_${Date.now()}_${cctvFile.name}`;
+      // Upload CCTV file with sanitized filename
+      const cctvSafeFilename = sanitizeFilename(cctvFile.name);
+      const cctvPath = `${applicationId}/cctv_${Date.now()}_${cctvSafeFilename}`;
       const { error: cctvError } = await supabase.storage
         .from("cafe-data")
         .upload(cctvPath, cctvFile);
