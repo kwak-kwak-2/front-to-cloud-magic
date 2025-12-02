@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
@@ -106,6 +106,7 @@ const Analysis = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">피크 시간대</p>
+                  <p className="text-xs text-muted-foreground mb-1">POS 데이터 기반</p>
                   <p className="text-3xl font-bold text-primary mt-2">
                     {analysisData.peak_hour}
                   </p>
@@ -120,6 +121,7 @@ const Analysis = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">장시간 체류율</p>
+                  <p className="text-xs text-muted-foreground mb-1">CCTV 분석 기반</p>
                   <p className="text-3xl font-bold text-accent mt-2">
                     {analysisData.long_stay_rate}%
                   </p>
@@ -134,6 +136,7 @@ const Analysis = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">일평균 고객수</p>
+                  <p className="text-xs text-muted-foreground mb-1">POS 데이터 기반</p>
                   <p className="text-3xl font-bold text-info mt-2">
                     {Math.floor(Math.random() * 100 + 80)}명
                   </p>
@@ -149,6 +152,9 @@ const Analysis = () => {
           <Card className="border-2 animate-fade-in">
             <CardHeader>
               <CardTitle>시간대별 고객 유입</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                CCTV 영상 분석 기반
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {hasCustomerFlow ? (
@@ -180,6 +186,9 @@ const Analysis = () => {
           <Card className="border-2 animate-fade-in">
             <CardHeader>
               <CardTitle>체류 시간 분포</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                CCTV 영상 분석 기반
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
