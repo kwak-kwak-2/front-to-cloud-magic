@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload as UploadIcon, FileSpreadsheet, Video, ArrowRight } from "lucide-react";
+import { Upload as UploadIcon, FileSpreadsheet, ArrowRight } from "lucide-react";
 import * as XLSX from "xlsx";
 
 const Upload = () => {
@@ -26,125 +26,109 @@ const Upload = () => {
     return `${sanitized}.${extension}`;
   };
 
-  const extractVideoFrames = async (videoFile: File, numFrames: number = 12): Promise<string[]> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement("video");
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-      
-      if (!ctx) {
-        reject(new Error("Canvas context not available"));
-        return;
+  // Parse CCTV CSV/Excel data
+  const analyzeCctvData = async (file: File) => {
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(arrayBuffer, { type: "array" });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
+
+    const hourlyStats: { [key: string]: number } = {};
+    const seatLocationStats: { [key: string]: number } = {};
+    const dwellTimes: number[] = [];
+    let laptopUsers = 0;
+    let totalCustomers = 0;
+
+    for (const row of jsonData) {
+      totalCustomers++;
+
+      // Parse Entry_Time to get hour
+      const entryTime = row["Entry_Time"] || row["entry_time"];
+      if (entryTime) {
+        const match = String(entryTime).match(/(\d{1,2}):/);
+        if (match) {
+          const hour = `${match[1].padStart(2, "0")}:00`;
+          hourlyStats[hour] = (hourlyStats[hour] || 0) + 1;
+        }
       }
 
-      const frames: string[] = [];
-      const url = URL.createObjectURL(videoFile);
-      video.src = url;
-      video.muted = true;
+      // Seat location
+      const seatLocation = row["Seat_Location"] || row["seat_location"];
+      if (seatLocation) {
+        seatLocationStats[seatLocation] = (seatLocationStats[seatLocation] || 0) + 1;
+      }
 
-      video.onloadedmetadata = () => {
-        const duration = video.duration;
-        const interval = duration / numFrames;
-        let currentFrame = 0;
+      // Laptop usage
+      const laptopUsage = row["Laptop_Usage"] || row["laptop_usage"];
+      if (laptopUsage === true || laptopUsage === "True" || laptopUsage === "true") {
+        laptopUsers++;
+      }
 
-        const captureFrame = () => {
-          if (currentFrame >= numFrames) {
-            URL.revokeObjectURL(url);
-            resolve(frames);
-            return;
-          }
-
-          video.currentTime = currentFrame * interval;
-        };
-
-        video.onseeked = () => {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          frames.push(canvas.toDataURL("image/jpeg", 0.8));
-          currentFrame++;
-          captureFrame();
-        };
-
-        captureFrame();
-      };
-
-      video.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("Failed to load video"));
-      };
-    });
-  };
-
-  const analyzeVideoFrames = async (frames: string[]): Promise<{
-    hourlyFlow: { hour: string; customers: number }[];
-    longStayRate: number;
-    stayDistribution: { name: string; value: number }[];
-  }> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    // Analyze frames in batches
-    const batchSize = 3;
-    const allAnalysis: any[] = [];
-
-    for (let i = 0; i < frames.length; i += batchSize) {
-      const batch = frames.slice(i, i + batchSize);
-      
-      const promises = batch.map(async (frame, idx) => {
-        const frameNumber = i + idx;
-        const estimatedHour = 9 + Math.floor((frameNumber / frames.length) * 12); // 9AM-9PM
-        
-        const { data, error } = await supabase.functions.invoke("analyze-video-frame", {
-          body: { 
-            image: frame,
-            frameNumber,
-            totalFrames: frames.length 
-          }
-        });
-
-        if (error) {
-          console.error(`Frame ${frameNumber} analysis error:`, error);
-          return { hour: estimatedHour, customers: 0 };
+      // Dwell time
+      const dwellTime = row["Dwell_Time_min"] || row["dwell_time_min"];
+      if (dwellTime) {
+        const time = typeof dwellTime === "number" ? dwellTime : parseInt(dwellTime);
+        if (!isNaN(time)) {
+          dwellTimes.push(time);
         }
-
-        return { 
-          hour: estimatedHour, 
-          customers: data.peopleCount || 0,
-          activities: data.activities || []
-        };
-      });
-
-      const batchResults = await Promise.all(promises);
-      allAnalysis.push(...batchResults);
+      }
     }
 
-    // Aggregate by hour
-    const hourlyMap: { [key: string]: number[] } = {};
-    allAnalysis.forEach(result => {
-      const hourKey = `${result.hour.toString().padStart(2, "0")}:00`;
-      if (!hourlyMap[hourKey]) hourlyMap[hourKey] = [];
-      hourlyMap[hourKey].push(result.customers);
-    });
+    // Calculate hourly flow
+    const hourlyFlow = Object.entries(hourlyStats)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hour, count]) => ({
+        hour,
+        customers: count,
+      }));
 
-    const hourlyFlow = Object.entries(hourlyMap).map(([hour, counts]) => ({
-      hour,
-      customers: Math.round(counts.reduce((a, b) => a + b, 0) / counts.length)
-    })).sort((a, b) => a.hour.localeCompare(b.hour));
+    // Calculate seat location distribution
+    const seatDistribution = Object.entries(seatLocationStats).map(([name, value]) => ({
+      name: name === "Group" ? "그룹석" : 
+            name === "Wall" ? "벽면석" : 
+            name === "Window" ? "창가석" : 
+            name === "Center" ? "중앙석" : name,
+      value,
+    }));
 
-    // Calculate stay distribution (mock for now based on patterns)
-    const totalPeople = hourlyFlow.reduce((sum, h) => sum + h.customers, 0);
-    const avgPeople = totalPeople / hourlyFlow.length;
-    
+    // Calculate dwell time distribution
+    const shortStay = dwellTimes.filter(t => t < 30).length;
+    const mediumStay = dwellTimes.filter(t => t >= 30 && t < 60).length;
+    const longStay = dwellTimes.filter(t => t >= 60 && t < 120).length;
+    const veryLongStay = dwellTimes.filter(t => t >= 120).length;
+
     const stayDistribution = [
-      { name: "30분 미만", value: Math.round(avgPeople * 0.25) },
-      { name: "30분-1시간", value: Math.round(avgPeople * 0.35) },
-      { name: "1-2시간", value: Math.round(avgPeople * 0.30) },
-      { name: "2시간 이상", value: Math.round(avgPeople * 0.10) }
+      { name: "30분 미만", value: shortStay },
+      { name: "30분-1시간", value: mediumStay },
+      { name: "1-2시간", value: longStay },
+      { name: "2시간 이상", value: veryLongStay },
     ];
 
-    const longStayRate = Math.round((stayDistribution[3].value / avgPeople) * 100);
+    // Calculate long stay rate (2시간 이상)
+    const longStayRate = totalCustomers > 0 
+      ? Math.round((veryLongStay / totalCustomers) * 100) 
+      : 0;
 
-    return { hourlyFlow, longStayRate, stayDistribution };
+    // Calculate laptop usage rate
+    const laptopUsageRate = totalCustomers > 0 
+      ? Math.round((laptopUsers / totalCustomers) * 100) 
+      : 0;
+
+    // Calculate average dwell time
+    const avgDwellTime = dwellTimes.length > 0
+      ? Math.round(dwellTimes.reduce((a, b) => a + b, 0) / dwellTimes.length)
+      : 0;
+
+    return {
+      hourlyFlow,
+      seatDistribution,
+      stayDistribution,
+      longStayRate,
+      laptopUsageRate,
+      avgDwellTime,
+      totalCustomers,
+    };
   };
 
   const analyzeExcelData = async (file: File) => {
@@ -275,29 +259,11 @@ const Upload = () => {
         revenue: Math.round(stats.revenue),
       }));
 
-    const recommendations = [
-      {
-        title: `${peakHour} 피크 시간대 시간제 운영 도입`,
-        description: `분석 결과 ${peakHour}에 가장 많은 ${maxCustomers}명의 고객이 방문합니다. 이 시간대에 최대 이용 시간을 2시간으로 제한하여 좌석 회전율을 높이는 것을 권장합니다.`,
-        expected_impact: "좌석 회전율 30% 증가 예상",
-      },
-      {
-        title: "장시간 체류 고객 관리 시스템",
-        description: `현재 ${longStayRate}%의 고객이 2시간 이상 머무릅니다. 시간대별 차등 요금제나 재주문 유도 시스템을 도입하여 수익성을 개선할 수 있습니다.`,
-        expected_impact: "시간당 매출 25% 향상 예상",
-      },
-      {
-        title: "데이터 기반 스태프 배치 최적화",
-        description: `시간대별 고객 유입 데이터를 활용하여 스태프 근무 시간을 최적화하면 인건비를 절감하면서도 서비스 품질을 유지할 수 있습니다.`,
-        expected_impact: "인건비 15% 절감 예상",
-      },
-    ];
-
     return {
       peakHour,
       totalCustomers,
       customerFlow,
-      recommendations
+      maxCustomers
     };
   };
 
@@ -342,30 +308,49 @@ const Upload = () => {
         },
       ]);
 
-      // Analyze Excel data
+      // Analyze POS Excel data
       toast.info("POS 데이터 분석 중...");
-      const excelResult = await analyzeExcelData(posFile);
+      const posResult = await analyzeExcelData(posFile);
 
-      // Analyze CCTV video
-      toast.info("CCTV 영상 분석 중... (2-3분 소요)");
-      const videoFrames = await extractVideoFrames(cctvFile, 12);
-      const videoResult = await analyzeVideoFrames(videoFrames);
+      // Analyze CCTV CSV data
+      toast.info("CCTV 데이터 분석 중...");
+      const cctvResult = await analyzeCctvData(cctvFile);
 
-      // Combine results
+      // Generate recommendations based on both data sources
+      const recommendations = [
+        {
+          title: `${posResult.peakHour} 피크 시간대 시간제 운영 도입`,
+          description: `분석 결과 ${posResult.peakHour}에 가장 많은 ${posResult.maxCustomers}명의 고객이 방문합니다. 이 시간대에 최대 이용 시간을 2시간으로 제한하여 좌석 회전율을 높이는 것을 권장합니다.`,
+          expected_impact: "좌석 회전율 30% 증가 예상",
+        },
+        {
+          title: "장시간 체류 고객 관리 시스템",
+          description: `현재 ${cctvResult.longStayRate}%의 고객이 2시간 이상 머무릅니다. 시간대별 차등 요금제나 재주문 유도 시스템을 도입하여 수익성을 개선할 수 있습니다.`,
+          expected_impact: "시간당 매출 25% 향상 예상",
+        },
+        {
+          title: "노트북 사용 고객 전용 구역 설정",
+          description: `분석 결과 ${cctvResult.laptopUsageRate}%의 고객이 노트북을 사용합니다. 전용 구역을 지정하여 일반 고객과 업무/학습 고객을 분리하면 양측 모두의 만족도를 높일 수 있습니다.`,
+          expected_impact: "고객 만족도 20% 향상 예상",
+        },
+      ];
+
+      // Save video analysis data from CCTV CSV
       const videoAnalysis = {
-        avgStayTime: "135분",
-        seatUtilization: "82%",
-        beverageOrderRate: "68%",
+        avgStayTime: `${cctvResult.avgDwellTime}분`,
+        seatDistribution: cctvResult.seatDistribution,
+        laptopUsageRate: `${cctvResult.laptopUsageRate}%`,
+        stayDistribution: cctvResult.stayDistribution,
       };
 
       const { error: insertError } = await supabase
         .from("analysis_results")
         .insert({
           application_id: applicationId,
-          peak_hour: excelResult.peakHour,
-          long_stay_rate: videoResult.longStayRate,
-          customer_flow: videoResult.hourlyFlow,
-          recommendations: excelResult.recommendations,
+          peak_hour: posResult.peakHour,
+          long_stay_rate: cctvResult.longStayRate,
+          customer_flow: cctvResult.hourlyFlow,
+          recommendations: recommendations,
           video_analysis: videoAnalysis,
         });
 
@@ -392,7 +377,7 @@ const Upload = () => {
             데이터 업로드
           </h1>
           <p className="text-lg text-muted-foreground">
-            정확한 분석을 위해 POS 데이터와 CCTV 영상을 제공해주세요
+            정확한 분석을 위해 POS 데이터와 CCTV 데이터를 제공해주세요
           </p>
         </div>
 
@@ -420,14 +405,14 @@ const Upload = () => {
                           {posFile ? posFile.name : "Excel 파일을 선택하세요"}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          .xlsx, .xls 형식 지원
+                          .xlsx, .xls, .csv 형식 지원
                         </p>
                       </div>
                     </div>
                     <input
                       id="pos_file"
                       type="file"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.csv"
                       onChange={(e) => setPosFile(e.target.files?.[0] || null)}
                       className="hidden"
                       required
@@ -438,27 +423,27 @@ const Upload = () => {
 
               <div className="space-y-4">
                 <div className="flex items-center gap-3 mb-4">
-                  <Video className="h-6 w-6 text-primary" />
-                  <h3 className="text-xl font-semibold">CCTV 영상 데이터</h3>
+                  <FileSpreadsheet className="h-6 w-6 text-accent" />
+                  <h3 className="text-xl font-semibold">CCTV 분석 데이터</h3>
                 </div>
                 
-                <div className="border-2 border-dashed border-border rounded-lg p-8 hover:border-primary/50 transition-colors">
+                <div className="border-2 border-dashed border-border rounded-lg p-8 hover:border-accent/50 transition-colors">
                   <Label htmlFor="cctv_file" className="cursor-pointer">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <UploadIcon className="h-12 w-12 text-muted-foreground" />
                       <div className="text-center">
                         <p className="font-medium">
-                          {cctvFile ? cctvFile.name : "영상 파일을 선택하세요"}
+                          {cctvFile ? cctvFile.name : "CSV/Excel 파일을 선택하세요"}
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          .mp4, .avi 형식 지원
+                          .csv, .xlsx, .xls 형식 지원 (고객ID, 좌석위치, 체류시간 등)
                         </p>
                       </div>
                     </div>
                     <input
                       id="cctv_file"
                       type="file"
-                      accept=".mp4,.avi"
+                      accept=".csv,.xlsx,.xls"
                       onChange={(e) => setCctvFile(e.target.files?.[0] || null)}
                       className="hidden"
                       required
