@@ -1,59 +1,25 @@
-import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { TrendingUp, Users, Clock, ArrowRight, Loader2, Laptop, MapPin } from "lucide-react";
+import { TrendingUp, Users, Clock, ArrowRight, Loader2, Laptop } from "lucide-react";
+import { useAnalysisData } from "@/hooks/useAnalysisData";
+import MetricCard from "@/components/analysis/MetricCard";
+import CustomerFlowChart from "@/components/analysis/CustomerFlowChart";
+import StayDistributionChart from "@/components/analysis/StayDistributionChart";
+import SeatDistributionChart from "@/components/analysis/SeatDistributionChart";
+import RecommendationsList from "@/components/analysis/RecommendationsList";
 
-const COLORS = ["hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--warning))", "hsl(var(--info))"];
+const DEFAULT_STAY_DISTRIBUTION = [
+  { name: "30분 미만", value: 25 },
+  { name: "30분-1시간", value: 35 },
+  { name: "1-2시간", value: 30 },
+  { name: "2시간 이상", value: 10 },
+];
 
 const Analysis = () => {
   const { applicationId } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [analysisData, setAnalysisData] = useState<any>(null);
-
-  useEffect(() => {
-    const fetchAnalysis = async () => {
-      try {
-        // 최신 분석 결과 1건만 가져오기
-        let attempts = 0;
-        const maxAttempts = 5;
-
-        while (attempts < maxAttempts) {
-          const { data, error } = await supabase
-            .from("analysis_results")
-            .select("*")
-            .eq("application_id", applicationId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (error) {
-            console.error("Error fetching analysis:", error);
-            break;
-          }
-
-          if (data) {
-            setAnalysisData(data);
-            setLoading(false);
-            return;
-          }
-
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          attempts++;
-        }
-
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching analysis:", error);
-        setLoading(false);
-      }
-    };
-
-    fetchAnalysis();
-  }, [applicationId]);
+  const { loading, analysisData } = useAnalysisData(applicationId);
 
   if (loading) {
     return (
@@ -85,15 +51,8 @@ const Analysis = () => {
   }
 
   const customerFlow = analysisData.customer_flow || [];
-  const hasCustomerFlow = Array.isArray(customerFlow) && customerFlow.length > 0;
-  
   const videoAnalysis = analysisData.video_analysis || {};
-  const stayDistribution = videoAnalysis.stayDistribution || [
-    { name: "30분 미만", value: 25 },
-    { name: "30분-1시간", value: 35 },
-    { name: "1-2시간", value: 30 },
-    { name: "2시간 이상", value: 10 },
-  ];
+  const stayDistribution = videoAnalysis.stayDistribution || DEFAULT_STAY_DISTRIBUTION;
   const seatDistribution = videoAnalysis.seatDistribution || [];
 
   return (
@@ -110,192 +69,55 @@ const Analysis = () => {
 
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12 animate-fade-in">
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">피크 시간대</p>
-                  <p className="text-xs text-muted-foreground mb-1">POS 데이터 기반</p>
-                  <p className="text-2xl font-bold text-primary mt-2">
-                    {analysisData.peak_hour}
-                  </p>
-                </div>
-                <Clock className="h-10 w-10 text-primary/20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">장시간 체류율</p>
-                  <p className="text-xs text-muted-foreground mb-1">CCTV 데이터 기반</p>
-                  <p className="text-2xl font-bold text-accent mt-2">
-                    {analysisData.long_stay_rate}%
-                  </p>
-                </div>
-                <TrendingUp className="h-10 w-10 text-accent/20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">평균 체류시간</p>
-                  <p className="text-xs text-muted-foreground mb-1">CCTV 데이터 기반</p>
-                  <p className="text-2xl font-bold text-info mt-2">
-                    {videoAnalysis.avgStayTime || "N/A"}
-                  </p>
-                </div>
-                <Users className="h-10 w-10 text-info/20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">노트북 사용률</p>
-                  <p className="text-xs text-muted-foreground mb-1">CCTV 데이터 기반</p>
-                  <p className="text-2xl font-bold text-warning mt-2">
-                    {videoAnalysis.laptopUsageRate || "N/A"}
-                  </p>
-                </div>
-                <Laptop className="h-10 w-10 text-warning/20" />
-              </div>
-            </CardContent>
-          </Card>
+          <MetricCard
+            title="피크 시간대"
+            subtitle="POS 데이터 기반"
+            value={analysisData.peak_hour}
+            Icon={Clock}
+            iconColorClass="text-primary/20"
+            valueColorClass="text-primary"
+          />
+          <MetricCard
+            title="장시간 체류율"
+            subtitle="CCTV 데이터 기반"
+            value={`${analysisData.long_stay_rate}%`}
+            Icon={TrendingUp}
+            iconColorClass="text-accent/20"
+            valueColorClass="text-accent"
+          />
+          <MetricCard
+            title="평균 체류시간"
+            subtitle="CCTV 데이터 기반"
+            value={videoAnalysis.avgStayTime || "N/A"}
+            Icon={Users}
+            iconColorClass="text-info/20"
+            valueColorClass="text-info"
+          />
+          <MetricCard
+            title="노트북 사용률"
+            subtitle="CCTV 데이터 기반"
+            value={videoAnalysis.laptopUsageRate || "N/A"}
+            Icon={Laptop}
+            iconColorClass="text-warning/20"
+            valueColorClass="text-warning"
+          />
         </div>
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-          <Card className="border-2 animate-fade-in">
-            <CardHeader>
-              <CardTitle>시간대별 고객 유입</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                CCTV 데이터 기반 (입장 시간)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {hasCustomerFlow ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={customerFlow}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="hour" stroke="hsl(var(--muted-foreground))" />
-                    <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <Bar dataKey="customers" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground text-sm text-center">
-                  업로드된 데이터에서 시간 정보를 찾지 못해
-                  <br />
-                  시간대별 고객 유입 그래프를 표시할 수 없습니다.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 animate-fade-in">
-            <CardHeader>
-              <CardTitle>체류 시간 분포</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                CCTV 데이터 기반 (Dwell_Time_min)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={stayDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={100}
-                    fill="hsl(var(--primary))"
-                    dataKey="value"
-                  >
-                    {stayDistribution.map((_: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          <CustomerFlowChart data={customerFlow} />
+          <StayDistributionChart data={stayDistribution} />
         </div>
 
         {/* Seat Distribution Chart */}
         {seatDistribution.length > 0 && (
           <div className="grid grid-cols-1 gap-8 mb-12">
-            <Card className="border-2 animate-fade-in">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-primary" />
-                  <CardTitle>좌석 위치별 선호도</CardTitle>
-                </div>
-                <CardDescription className="text-xs text-muted-foreground">
-                  CCTV 데이터 기반 (Seat_Location)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={seatDistribution} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                    <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" width={80} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <Bar dataKey="value" fill="hsl(var(--accent))" radius={[0, 8, 8, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            <SeatDistributionChart data={seatDistribution} />
           </div>
         )}
 
         {/* Recommendations */}
-        <Card className="border-2 mb-8 animate-fade-in">
-          <CardHeader>
-            <CardTitle className="text-2xl">맞춤형 개선 방안</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {analysisData.recommendations?.map((rec: any, index: number) => (
-                <div
-                  key={index}
-                  className="bg-success/10 border border-success/30 rounded-lg p-4"
-                >
-                  <h4 className="font-semibold text-lg mb-2">{rec.title}</h4>
-                  <p className="text-foreground/80">{rec.description}</p>
-                  {rec.expected_impact && (
-                    <p className="text-sm text-success mt-2 font-medium">
-                      예상 효과: {rec.expected_impact}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <RecommendationsList recommendations={analysisData.recommendations} />
 
         <div className="text-center">
           <Button
