@@ -27,11 +27,24 @@ export const analyzeCctvData = async (file: File): Promise<CctvAnalysisResult> =
     totalCustomers++;
 
     // Parse Entry_Time to get hour
-    const entryTime = row["Entry_Time"] || row["entry_time"];
-    if (entryTime) {
-      const match = String(entryTime).match(/(\d{1,2}):/);
-      if (match) {
-        const hour = `${match[1].padStart(2, "0")}:00`;
+    const entryTime = row["Entry_Time"] || row["entry_time"] || row["입장시간"] || row["시간"];
+    if (entryTime != null) {
+      let hour: string | null = null;
+
+      if (typeof entryTime === "string") {
+        // HH:MM 또는 HH:MM:SS 형식
+        const match = String(entryTime).match(/(\d{1,2}):/);
+        if (match) {
+          hour = `${match[1].padStart(2, "0")}:00`;
+        }
+      } else if (typeof entryTime === "number") {
+        // Excel 시간 형식 (0.0 ~ 1.0 범위의 소수점)
+        // 0.5 = 12:00, 0.95833 = 23:00
+        const hourNum = Math.floor(entryTime * 24) % 24;
+        hour = `${hourNum.toString().padStart(2, "0")}:00`;
+      }
+
+      if (hour) {
         hourlyStats[hour] = (hourlyStats[hour] || 0) + 1;
       }
     }
