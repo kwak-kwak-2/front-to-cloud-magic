@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface DailyFlow {
+  date: string;
+  hourlyData: { hour: string; customers: number }[];
+}
+
 interface AnalysisData {
   peak_hour: string;
   long_stay_rate: number;
@@ -11,6 +16,7 @@ interface AnalysisData {
     laptopUsageRate?: string;
     stayDistribution?: { name: string; value: number }[];
     seatDistribution?: { name: string; value: number }[];
+    dailyFlows?: DailyFlow[];
   };
 }
 
