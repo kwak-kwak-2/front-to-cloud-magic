@@ -8,6 +8,7 @@ import CustomerFlowChart from "@/components/analysis/CustomerFlowChart";
 import StayDistributionChart from "@/components/analysis/StayDistributionChart";
 import SeatDistributionChart from "@/components/analysis/SeatDistributionChart";
 import RecommendationsList from "@/components/analysis/RecommendationsList";
+import DailyFlowCharts from "@/components/analysis/DailyFlowCharts";
 
 const DEFAULT_STAY_DISTRIBUTION = [
   { name: "30분 미만", value: 25 },
@@ -54,6 +55,7 @@ const Analysis = () => {
   const videoAnalysis = analysisData.video_analysis || {};
   const stayDistribution = videoAnalysis.stayDistribution || DEFAULT_STAY_DISTRIBUTION;
   const seatDistribution = videoAnalysis.seatDistribution || [];
+  const dailyFlows = videoAnalysis.dailyFlows || [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background">
@@ -102,6 +104,13 @@ const Analysis = () => {
             valueColorClass="text-warning"
           />
         </div>
+
+        {/* Daily Flow Charts - 30일 일별 시간대 그래프 */}
+        {dailyFlows.length > 0 && (
+          <div className="mb-12">
+            <DailyFlowCharts data={dailyFlows} />
+          </div>
+        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">

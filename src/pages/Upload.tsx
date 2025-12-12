@@ -78,7 +78,10 @@ const Upload = () => {
 
       // Generate recommendations
       const recommendations = generateRecommendations(posResult, cctvResult);
-      const videoAnalysis = createVideoAnalysis(cctvResult);
+      const videoAnalysis = {
+        ...createVideoAnalysis(cctvResult),
+        dailyFlows: posResult.dailyFlows,
+      };
 
       // Save analysis results
       const { error: insertError } = await supabase

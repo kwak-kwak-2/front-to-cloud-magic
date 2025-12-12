@@ -1,10 +1,16 @@
 import * as XLSX from "xlsx";
 
+export interface DailyCustomerFlow {
+  date: string;
+  hourlyData: { hour: string; customers: number }[];
+}
+
 export interface PosAnalysisResult {
   peakHour: string;
   totalCustomers: number;
   customerFlow: { hour: string; customers: number; revenue: number }[];
   maxCustomers: number;
+  dailyFlows: DailyCustomerFlow[];
 }
 
 export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => {
@@ -16,6 +22,8 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
   const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet);
 
   const hourlyStats: { [key: string]: { count: number; revenue: number; stayTime: number[] } } = {};
+  // 날짜별 + 시간대별 통계
+  const dailyHourlyStats: { [date: string]: { [hour: string]: number } } = {};
   let totalCustomers = 0;
 
   const dataToAnalyze = jsonData.slice(0, 1000);
@@ -41,6 +49,12 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
         row["이용시간"] ||
         row["Duration"] ||
         row["stay_duration"]) as unknown;
+    // 날짜 필드 탐지
+    let dateField =
+      (row["날짜"] ||
+        row["Date"] ||
+        row["일자"] ||
+        row["date"]) as unknown;
 
     // Fallback: 자동으로 시간/매출 컬럼 탐지
     if (timeField == null) {
@@ -64,6 +78,21 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       }
     }
 
+    // 날짜 필드 자동 탐지
+    if (dateField == null) {
+      for (const value of Object.values(row)) {
+        if (typeof value === "string" && /\d{4}-\d{2}-\d{2}/.test(value)) {
+          dateField = value;
+          break;
+        }
+        if (typeof value === "number" && value > 40000 && value < 50000) {
+          // Excel 날짜 시리얼 번호
+          dateField = value;
+          break;
+        }
+      }
+    }
+
     if (timeField == null) continue;
 
     let hour: string;
@@ -80,12 +109,46 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       continue;
     }
 
+    // 날짜 파싱
+    let dateStr: string = "unknown";
+    if (dateField != null) {
+      if (typeof dateField === "string") {
+        const match = dateField.match(/(\d{4}-\d{2}-\d{2})/);
+        if (match) {
+          dateStr = match[1];
+        } else {
+          // MM/DD/YYYY 또는 DD/MM/YYYY 형식 시도
+          const slashMatch = dateField.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          if (slashMatch) {
+            const [, m, d, y] = slashMatch;
+            dateStr = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          }
+        }
+      } else if (typeof dateField === "number") {
+        // Excel 시리얼 날짜를 변환
+        const excelEpoch = new Date(1899, 11, 30);
+        const date = new Date(excelEpoch.getTime() + dateField * 86400000);
+        dateStr = date.toISOString().split("T")[0];
+      }
+    }
+
     if (!hourlyStats[hour]) {
       hourlyStats[hour] = { count: 0, revenue: 0, stayTime: [] };
     }
 
     hourlyStats[hour].count++;
     totalCustomers++;
+
+    // 일별 시간대별 집계
+    if (dateStr !== "unknown") {
+      if (!dailyHourlyStats[dateStr]) {
+        dailyHourlyStats[dateStr] = {};
+      }
+      if (!dailyHourlyStats[dateStr][hour]) {
+        dailyHourlyStats[dateStr][hour] = 0;
+      }
+      dailyHourlyStats[dateStr][hour]++;
+    }
 
     if (revenueField != null) {
       const revenue =
@@ -126,10 +189,22 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       revenue: Math.round(stats.revenue),
     }));
 
+  // 일별 데이터 생성 (최대 30일)
+  const dailyFlows: DailyCustomerFlow[] = Object.entries(dailyHourlyStats)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 30)
+    .map(([date, hours]) => ({
+      date,
+      hourlyData: Object.entries(hours)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([hour, customers]) => ({ hour, customers })),
+    }));
+
   return {
     peakHour,
     totalCustomers,
     customerFlow,
     maxCustomers,
+    dailyFlows,
   };
 };
