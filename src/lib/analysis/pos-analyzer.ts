@@ -35,7 +35,8 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
   const dailyRevenueStats: { [date: string]: { revenue: number; customers: number } } = {};
   let totalCustomers = 0;
 
-  const dataToAnalyze = jsonData.slice(0, 5000); // 더 많은 데이터 처리 (5000행)
+  // 전체 데이터 처리 (제한 없음)
+  const dataToAnalyze = jsonData;
 
   // 첫 번째 행의 컬럼명 확인을 위한 디버깅
   if (jsonData.length > 0) {
