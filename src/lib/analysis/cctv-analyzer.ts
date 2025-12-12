@@ -23,25 +23,45 @@ export const analyzeCctvData = async (file: File): Promise<CctvAnalysisResult> =
   let laptopUsers = 0;
   let totalCustomers = 0;
 
+  // 첫 번째 행의 컬럼명 확인을 위한 디버깅
+  if (jsonData.length > 0) {
+    console.log("CCTV Data - First row keys:", Object.keys(jsonData[0]));
+    console.log("CCTV Data - First row sample:", jsonData[0]);
+  }
+
   for (const row of jsonData) {
     totalCustomers++;
 
-    // Parse Entry_Time to get hour
-    const entryTime = row["Entry_Time"] || row["entry_time"] || row["입장시간"] || row["시간"];
+    // Entry_Time 필드 찾기 - 더 많은 변형 지원
+    const entryTime = row["Entry_Time"] || row["entry_time"] || row["입장시간"] || 
+                      row["시간"] || row["Time"] || row["time"] ||
+                      row["입장_시간"] || row["EntryTime"];
+    
     if (entryTime != null) {
       let hour: string | null = null;
+      const entryValue = entryTime;
 
-      if (typeof entryTime === "string") {
-        // HH:MM 또는 HH:MM:SS 형식
-        const match = String(entryTime).match(/(\d{1,2}):/);
-        if (match) {
-          hour = `${match[1].padStart(2, "0")}:00`;
+      if (typeof entryValue === "string") {
+        // "HH:MM" 또는 "HH:MM:SS" 형식
+        const timeMatch = entryValue.match(/(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+          const hourNum = parseInt(timeMatch[1]);
+          if (hourNum >= 0 && hourNum <= 23) {
+            hour = `${hourNum.toString().padStart(2, "0")}:00`;
+          }
         }
-      } else if (typeof entryTime === "number") {
-        // Excel 시간 형식 (0.0 ~ 1.0 범위의 소수점)
-        // 0.5 = 12:00, 0.95833 = 23:00
-        const hourNum = Math.floor(entryTime * 24) % 24;
-        hour = `${hourNum.toString().padStart(2, "0")}:00`;
+      } else if (typeof entryValue === "number") {
+        // Excel 시간 형식: 0.0 ~ 0.9999... (하루를 1로 표현)
+        // 0.0 = 00:00, 0.5 = 12:00, 0.95833 = 23:00
+        if (entryValue >= 0 && entryValue < 1) {
+          const hourNum = Math.floor(entryValue * 24);
+          hour = `${hourNum.toString().padStart(2, "0")}:00`;
+        } else if (entryValue >= 1) {
+          // 1 이상인 경우 날짜+시간 시리얼 (날짜 부분 제거)
+          const timePart = entryValue % 1;
+          const hourNum = Math.floor(timePart * 24);
+          hour = `${hourNum.toString().padStart(2, "0")}:00`;
+        }
       }
 
       if (hour) {
