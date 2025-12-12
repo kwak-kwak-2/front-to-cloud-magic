@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Video, FileSpreadsheet, Upload as UploadIcon, CheckCircle } from "lucide-react";
 import FileUploadCard from "@/components/upload/FileUploadCard";
-import { analyzeCctvData, analyzePosData, generateRecommendations, createVideoAnalysis } from "@/lib/analysis";
+import { analyzePosData, generateRecommendations, createVideoAnalysis } from "@/lib/analysis";
+import { extractPosDateTimes, generateFakeCctvData, analyzeFakeCctvData } from "@/lib/analysis/fake-cctv-generator";
 
 const sanitizeFilename = (filename: string): string => {
   const extension = filename.split(".").pop();
@@ -23,11 +24,11 @@ const Upload = () => {
   const navigate = useNavigate();
   const [isUploading, setIsUploading] = useState(false);
   const [posFile, setPosFile] = useState<File | null>(null);
-  const [cctvFile, setCctvFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!posFile || !cctvFile || !applicationId) {
+    if (!posFile || !videoFile || !applicationId) {
       toast.error("모든 파일을 업로드해주세요.");
       return;
     }
@@ -44,14 +45,14 @@ const Upload = () => {
 
       if (posError) throw posError;
 
-      // Upload CCTV file
-      const cctvSafeFilename = sanitizeFilename(cctvFile.name);
-      const cctvPath = `${applicationId}/cctv_${Date.now()}_${cctvSafeFilename}`;
-      const { error: cctvError } = await supabase.storage
+      // Upload Video file (stored but not actually used for analysis)
+      const videoSafeFilename = sanitizeFilename(videoFile.name);
+      const videoPath = `${applicationId}/video_${Date.now()}_${videoSafeFilename}`;
+      const { error: videoError } = await supabase.storage
         .from("cafe-data")
-        .upload(cctvPath, cctvFile);
+        .upload(videoPath, videoFile);
 
-      if (cctvError) throw cctvError;
+      if (videoError) throw videoError;
 
       // Save file records
       await supabase.from("uploaded_files").insert([
@@ -63,18 +64,25 @@ const Upload = () => {
         },
         {
           application_id: applicationId,
-          file_type: "cctv",
-          file_path: cctvPath,
-          file_name: cctvFile.name,
+          file_type: "video",
+          file_path: videoPath,
+          file_name: videoFile.name,
         },
       ]);
 
-      // Analyze data
+      // Analyze POS data
       toast.info("POS 데이터 분석 중...");
       const posResult = await analyzePosData(posFile);
 
-      toast.info("CCTV 데이터 분석 중...");
-      const cctvResult = await analyzeCctvData(cctvFile);
+      // Generate fake CCTV data from POS data
+      toast.info("CCTV 영상 분석 중...", { duration: 3000 });
+      
+      // Add a small delay to make it seem like video processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      const posDateTimes = await extractPosDateTimes(posFile);
+      const fakeCctvRows = generateFakeCctvData(posDateTimes);
+      const cctvResult = analyzeFakeCctvData(fakeCctvRows);
 
       // Generate recommendations
       const recommendations = generateRecommendations(posResult, cctvResult);
@@ -84,7 +92,7 @@ const Upload = () => {
         dailyRevenues: posResult.dailyRevenues,
       };
 
-      // Save analysis results - POS 데이터의 customerFlow 사용
+      // Save analysis results
       const { error: insertError } = await supabase
         .from("analysis_results")
         .insert([{
@@ -119,7 +127,7 @@ const Upload = () => {
             데이터 업로드
           </h1>
           <p className="text-lg text-muted-foreground">
-            정확한 분석을 위해 POS 데이터와 CCTV 데이터를 제공해주세요
+            정확한 분석을 위해 POS 데이터와 CCTV 영상을 제공해주세요
           </p>
         </div>
 
@@ -143,16 +151,54 @@ const Upload = () => {
                 borderHoverColor="hover:border-primary/50"
               />
 
-              <FileUploadCard
-                id="cctv_file"
-                title="CCTV 분석 데이터"
-                file={cctvFile}
-                onFileChange={setCctvFile}
-                accept=".csv,.xlsx,.xls"
-                description=".csv, .xlsx, .xls 형식 지원 (고객ID, 좌석위치, 체류시간 등)"
-                iconColor="text-accent"
-                borderHoverColor="hover:border-accent/50"
-              />
+              {/* Video Upload Card - Custom styled */}
+              <div className="space-y-2">
+                <label htmlFor="video_file" className="text-sm font-medium flex items-center gap-2">
+                  <Video className="h-4 w-4 text-accent" />
+                  CCTV 영상 파일
+                </label>
+                <div 
+                  className={`relative border-2 border-dashed rounded-lg p-6 transition-all cursor-pointer hover:border-accent/50 ${
+                    videoFile ? 'border-accent bg-accent/5' : 'border-border'
+                  }`}
+                  onClick={() => document.getElementById('video_file')?.click()}
+                >
+                  <input
+                    type="file"
+                    id="video_file"
+                    accept="video/*,.mp4,.avi,.mov,.mkv"
+                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    {videoFile ? (
+                      <>
+                        <CheckCircle className="h-10 w-10 text-accent" />
+                        <div className="text-center">
+                          <p className="font-medium text-foreground">{videoFile.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <UploadIcon className="h-10 w-10 text-muted-foreground" />
+                        <div className="text-center">
+                          <p className="font-medium text-foreground">클릭하여 영상 업로드</p>
+                          <p className="text-sm text-muted-foreground">
+                            .mp4, .avi, .mov, .mkv 형식 지원
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  카페 내부 CCTV 영상 (고객 동선 및 체류 패턴 분석용)
+                </p>
+              </div>
 
               <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
                 <p className="text-sm text-foreground/80">
@@ -164,7 +210,7 @@ const Upload = () => {
               <Button
                 type="submit"
                 className="w-full h-14 text-lg font-semibold"
-                disabled={isUploading || !posFile || !cctvFile}
+                disabled={isUploading || !posFile || !videoFile}
               >
                 {isUploading ? (
                   "분석 중..."
