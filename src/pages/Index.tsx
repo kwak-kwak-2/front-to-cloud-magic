@@ -31,7 +31,7 @@ const Index = () => {
             className="h-16 px-10 text-lg font-semibold"
             onClick={() => navigate("/application")}
           >
-            무료 분석 신청하기
+            분석 신청하기
             <ArrowRight className="ml-2 h-6 w-6" />
           </Button>
         </div>
