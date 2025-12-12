@@ -5,12 +5,19 @@ export interface DailyCustomerFlow {
   hourlyData: { hour: string; customers: number }[];
 }
 
+export interface DailyRevenue {
+  date: string;
+  revenue: number;
+  customers: number;
+}
+
 export interface PosAnalysisResult {
   peakHour: string;
   totalCustomers: number;
   customerFlow: { hour: string; customers: number; revenue: number }[];
   maxCustomers: number;
   dailyFlows: DailyCustomerFlow[];
+  dailyRevenues: DailyRevenue[];
 }
 
 export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => {
@@ -24,9 +31,11 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
   const hourlyStats: { [key: string]: { count: number; revenue: number; stayTime: number[] } } = {};
   // 날짜별 + 시간대별 통계
   const dailyHourlyStats: { [date: string]: { [hour: string]: number } } = {};
+  // 날짜별 매출 및 고객 수 통계
+  const dailyRevenueStats: { [date: string]: { revenue: number; customers: number } } = {};
   let totalCustomers = 0;
 
-  const dataToAnalyze = jsonData.slice(0, 1000);
+  const dataToAnalyze = jsonData.slice(0, 5000); // 더 많은 데이터 처리 (5000행)
 
   // 첫 번째 행의 컬럼명 확인을 위한 디버깅
   if (jsonData.length > 0) {
@@ -158,6 +167,12 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
         dailyHourlyStats[dateStr][hour] = 0;
       }
       dailyHourlyStats[dateStr][hour]++;
+
+      // 일별 매출 및 고객 수 집계
+      if (!dailyRevenueStats[dateStr]) {
+        dailyRevenueStats[dateStr] = { revenue: 0, customers: 0 };
+      }
+      dailyRevenueStats[dateStr].customers++;
     }
 
     if (revenueField != null) {
@@ -167,6 +182,10 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
           : parseFloat(revenueField.toString().replace(/[^0-9.]/g, ""));
       if (!Number.isNaN(revenue)) {
         hourlyStats[hour].revenue += revenue;
+        // 일별 매출 집계
+        if (dateStr !== "unknown" && dailyRevenueStats[dateStr]) {
+          dailyRevenueStats[dateStr].revenue += revenue;
+        }
       }
     }
 
@@ -199,15 +218,25 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       revenue: Math.round(stats.revenue),
     }));
 
-  // 일별 데이터 생성 (최대 30일)
+  // 일별 데이터 생성 (최대 31일)
   const dailyFlows: DailyCustomerFlow[] = Object.entries(dailyHourlyStats)
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(0, 30)
+    .slice(0, 31)
     .map(([date, hours]) => ({
       date,
       hourlyData: Object.entries(hours)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([hour, customers]) => ({ hour, customers })),
+    }));
+
+  // 일별 매출 데이터 생성 (최대 31일)
+  const dailyRevenues: DailyRevenue[] = Object.entries(dailyRevenueStats)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, 31)
+    .map(([date, stats]) => ({
+      date,
+      revenue: Math.round(stats.revenue),
+      customers: stats.customers,
     }));
 
   return {
@@ -216,5 +245,6 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
     customerFlow,
     maxCustomers,
     dailyFlows,
+    dailyRevenues,
   };
 };
