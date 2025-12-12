@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   CheckCircle2, 
@@ -19,8 +20,144 @@ import {
   Laptop,
   Coffee,
   Building2,
-  Lightbulb
+  Lightbulb,
+  Layout,
+  UtensilsCrossed,
+  Settings,
+  Timer,
+  Eye,
+  ArrowUpRight,
+  Store,
+  Armchair,
+  ShoppingBag
 } from "lucide-react";
+
+// 벤치마킹 갤러리 타입
+interface BenchmarkCase {
+  id: string;
+  brand: string;
+  strategy: string;
+  problem: string;
+  description: string;
+  effect: string;
+  tags: string[];
+  category: "space" | "menu" | "operation" | "hybrid";
+  icon: React.ReactNode;
+}
+
+// 벤치마킹 사례 데이터
+const benchmarkCases: BenchmarkCase[] = [
+  // 공간 전략
+  {
+    id: "hollys-zoning",
+    brand: "할리스(Hollys)",
+    strategy: "스마트 조닝(Zoning)",
+    problem: "카공족과 대화 손님 간의 소음 갈등",
+    description: "카공족을 위한 '스터디존'과 대화 손님을 위한 '일반존'을 물리적으로 분리함.",
+    effect: "소음 갈등 해결 및 좌석 효율 극대화",
+    tags: ["회전율", "인테리어", "고객만족"],
+    category: "space",
+    icon: <Layout className="h-5 w-5" />,
+  },
+  {
+    id: "bluebottle-standing",
+    brand: "블루보틀(Blue Bottle)",
+    strategy: "스탠딩 바 & 높은 테이블",
+    problem: "낮은 좌석 회전율",
+    description: "회전율이 필요한 곳에 의자가 불편하거나 서서 마시는 테이블 배치.",
+    effect: "빠른 섭취 유도로 회전율 증가",
+    tags: ["회전율", "인테리어"],
+    category: "space",
+    icon: <Armchair className="h-5 w-5" />,
+  },
+  {
+    id: "starbucks-community",
+    brand: "스타벅스(Starbucks)",
+    strategy: "커뮤니티 테이블",
+    problem: "1인 손님이 4인석 차지",
+    description: "1인 손님들을 모으기 위한 대형 공용 테이블 설치.",
+    effect: "1인이 4인석을 차지하는 비효율 제거",
+    tags: ["회전율", "좌석효율"],
+    category: "space",
+    icon: <Users className="h-5 w-5" />,
+  },
+  // 메뉴 및 객단가 전략
+  {
+    id: "paulbassett-option",
+    brand: "폴바셋(Paul Bassett)",
+    strategy: "옵션 다양화 전략",
+    problem: "제한된 메뉴로 인한 틈새 고객 이탈",
+    description: "소화가 잘되는 우유, 두유 등 커스텀 옵션 제공.",
+    effect: "틈새 고객 확보 및 추가 금액으로 객단가 상승",
+    tags: ["객단가", "메뉴"],
+    category: "menu",
+    icon: <UtensilsCrossed className="h-5 w-5" />,
+  },
+  {
+    id: "knotted-display",
+    brand: "노티드(Knotted)",
+    strategy: "비주얼 진열 효과",
+    problem: "음료만 주문하는 고객",
+    description: "디저트가 꽉 차 보이고 먹음직스럽게 쌓아두는 진열 방식.",
+    effect: "음료만 시키려던 고객의 디저트 추가 구매 유도 (충동구매)",
+    tags: ["객단가", "인테리어", "디저트"],
+    category: "menu",
+    icon: <Eye className="h-5 w-5" />,
+  },
+  {
+    id: "ediya-sizeup",
+    brand: "이디야(Ediya)",
+    strategy: "사이즈업 전략",
+    problem: "장시간 체류 대비 낮은 객단가",
+    description: "오래 머무는 고객을 위해 엑스트라 사이즈 옵션 적극 홍보.",
+    effect: "체류 시간 대비 객단가 방어",
+    tags: ["객단가", "메뉴"],
+    category: "menu",
+    icon: <ArrowUpRight className="h-5 w-5" />,
+  },
+  // 운영 및 IT 전략
+  {
+    id: "compose-window",
+    brand: "컴포즈/메가커피",
+    strategy: "테이크아웃 전용 윈도우",
+    problem: "매장 내 혼잡 및 배달 기사 동선 혼재",
+    description: "매장에 들어오지 않고 밖에서 바로 주문/픽업하는 창구 운영.",
+    effect: "매장 내 혼잡도 감소 및 배달 기사 동선 분리",
+    tags: ["운영효율", "테이크아웃"],
+    category: "operation",
+    icon: <Store className="h-5 w-5" />,
+  },
+  {
+    id: "starbucks-siren",
+    brand: "스타벅스(Starbucks)",
+    strategy: "사이렌 오더",
+    problem: "피크 시간대 긴 대기 줄",
+    description: "자리에 앉아서 모바일로 주문 결제.",
+    effect: "주문 대기 줄 삭제 및 심리적 부담 감소로 주문 빈도 증가",
+    tags: ["운영효율", "IT", "모바일"],
+    category: "operation",
+    icon: <Smartphone className="h-5 w-5" />,
+  },
+  // 하이브리드 모델
+  {
+    id: "studycafe-timepass",
+    brand: "랑스터디카페",
+    strategy: "시간제 이용권",
+    problem: "음료 미주문 장시간 체류 고객",
+    description: "음료 값이 아닌 '공간 이용 시간'을 판매.",
+    effect: "음료를 안 시켜도 수익 발생, 장시간 체류 고객 수익화",
+    tags: ["수익모델", "회전율"],
+    category: "hybrid",
+    icon: <Timer className="h-5 w-5" />,
+  },
+];
+
+const categoryLabels: Record<string, { label: string; color: string }> = {
+  space: { label: "공간 전략", color: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+  menu: { label: "메뉴/객단가", color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+  operation: { label: "운영/IT", color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+  hybrid: { label: "하이브리드", color: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
+};
 
 interface Problem {
   id: string;
@@ -404,6 +541,86 @@ const Solution = () => {
           </Card>
         )}
 
+        {/* 벤치마킹 갤러리 */}
+        <Card className="border-2 shadow-xl mb-8 animate-fade-in">
+          <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5">
+            <CardTitle className="text-2xl flex items-center gap-3">
+              <ShoppingBag className="h-7 w-7 text-primary" />
+              벤치마킹 갤러리
+            </CardTitle>
+            <CardDescription>
+              국내외 성공 카페들의 검증된 전략 사례를 확인하세요
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {/* 카테고리별 그룹 */}
+            {(["space", "menu", "operation", "hybrid"] as const).map((category) => {
+              const cases = benchmarkCases.filter((c) => c.category === category);
+              const categoryInfo = categoryLabels[category];
+              
+              return (
+                <div key={category} className="mb-8 last:mb-0">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Badge variant="outline" className={categoryInfo.color}>
+                      {categoryInfo.label}
+                    </Badge>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {cases.map((caseItem) => (
+                      <div
+                        key={caseItem.id}
+                        className="group border rounded-xl p-5 hover:shadow-lg hover:border-primary/30 transition-all duration-300 bg-card"
+                      >
+                        {/* 헤더 */}
+                        <div className="flex items-start gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                            {caseItem.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">{caseItem.brand}</p>
+                            <h4 className="font-bold text-foreground leading-tight">{caseItem.strategy}</h4>
+                          </div>
+                        </div>
+                        
+                        {/* 해결한 문제 */}
+                        <div className="bg-destructive/5 border border-destructive/10 rounded-lg px-3 py-2 mb-3">
+                          <p className="text-xs text-destructive font-medium">해결한 문제</p>
+                          <p className="text-sm text-foreground">{caseItem.problem}</p>
+                        </div>
+                        
+                        {/* 설명 */}
+                        <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
+                          {caseItem.description}
+                        </p>
+                        
+                        {/* 효과 */}
+                        <div className="flex items-start gap-2 mb-3 bg-success/5 border border-success/10 rounded-lg px-3 py-2">
+                          <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                          <p className="text-sm text-foreground">{caseItem.effect}</p>
+                        </div>
+                        
+                        {/* 태그 */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {caseItem.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-xs px-2 py-0.5 bg-secondary text-secondary-foreground rounded-full"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
         {/* CTA */}
         <Card className="border-2 shadow-xl bg-gradient-to-br from-primary/5 via-secondary to-accent/5 animate-fade-in">
           <CardContent className="py-12 text-center">
@@ -429,7 +646,7 @@ const Solution = () => {
       {/* Footer */}
       <footer className="py-8 border-t bg-secondary/20">
         <div className="container mx-auto px-4 text-center text-muted-foreground text-sm">
-          <p>벤치마킹 사례: 할리스커피, 스타벅스, 블루보틀, 토즈, 작심 스터디카페</p>
+          <p>벤치마킹 사례: 할리스, 블루보틀, 스타벅스, 폴바셋, 노티드, 이디야, 컴포즈, 메가커피, 랑스터디카페</p>
         </div>
       </footer>
     </div>
