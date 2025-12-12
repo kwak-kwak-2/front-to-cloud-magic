@@ -13,7 +13,7 @@ const CustomerFlowChart = ({ data }: CustomerFlowChartProps) => {
       <CardHeader>
         <CardTitle>시간대별 고객 유입</CardTitle>
         <CardDescription className="text-xs text-muted-foreground">
-          CCTV 데이터 기반 (입장 시간)
+          POS 데이터 기반 (거래 시간)
         </CardDescription>
       </CardHeader>
       <CardContent>

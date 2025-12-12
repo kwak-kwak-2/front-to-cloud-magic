@@ -83,14 +83,14 @@ const Upload = () => {
         dailyFlows: posResult.dailyFlows,
       };
 
-      // Save analysis results
+      // Save analysis results - POS 데이터의 customerFlow 사용
       const { error: insertError } = await supabase
         .from("analysis_results")
         .insert([{
           application_id: applicationId,
           peak_hour: posResult.peakHour,
           long_stay_rate: cctvResult.longStayRate,
-          customer_flow: JSON.parse(JSON.stringify(cctvResult.hourlyFlow)),
+          customer_flow: JSON.parse(JSON.stringify(posResult.customerFlow)),
           recommendations: JSON.parse(JSON.stringify(recommendations)),
           video_analysis: JSON.parse(JSON.stringify(videoAnalysis)),
         }]);
