@@ -97,12 +97,35 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       }
     }
 
-    // 날짜 필드 자동 탐지
+    // 날짜 필드 자동 탐지 (더 다양한 형식 지원)
     if (dateField == null) {
       for (const value of Object.values(row)) {
-        if (typeof value === "string" && /\d{4}-\d{2}-\d{2}/.test(value)) {
-          dateField = value;
-          break;
+        if (typeof value === "string") {
+          // YYYY-MM-DD 형식
+          if (/\d{4}-\d{2}-\d{2}/.test(value)) {
+            dateField = value;
+            break;
+          }
+          // YYYY/MM/DD 형식
+          if (/\d{4}\/\d{1,2}\/\d{1,2}/.test(value)) {
+            dateField = value;
+            break;
+          }
+          // MM/DD/YYYY 또는 DD/MM/YYYY 형식
+          if (/\d{1,2}\/\d{1,2}\/\d{4}/.test(value)) {
+            dateField = value;
+            break;
+          }
+          // YYYY.MM.DD 형식
+          if (/\d{4}\.\d{1,2}\.\d{1,2}/.test(value)) {
+            dateField = value;
+            break;
+          }
+          // YYYYMMDD 형식 (8자리 숫자)
+          if (/^\d{8}$/.test(value)) {
+            dateField = value;
+            break;
+          }
         }
         if (typeof value === "number" && value > 40000 && value < 50000) {
           // Excel 날짜 시리얼 번호
@@ -128,19 +151,42 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
       continue;
     }
 
-    // 날짜 파싱
+    // 날짜 파싱 (다양한 형식 지원)
     let dateStr: string = "unknown";
     if (dateField != null) {
       if (typeof dateField === "string") {
-        const match = dateField.match(/(\d{4}-\d{2}-\d{2})/);
+        // YYYY-MM-DD 형식
+        let match = dateField.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
         if (match) {
-          dateStr = match[1];
+          const [, y, m, d] = match;
+          dateStr = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
         } else {
-          // MM/DD/YYYY 또는 DD/MM/YYYY 형식 시도
-          const slashMatch = dateField.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          if (slashMatch) {
-            const [, m, d, y] = slashMatch;
+          // YYYY/MM/DD 형식
+          match = dateField.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+          if (match) {
+            const [, y, m, d] = match;
             dateStr = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+          } else {
+            // MM/DD/YYYY 형식
+            match = dateField.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (match) {
+              const [, m, d, y] = match;
+              dateStr = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+            } else {
+              // YYYY.MM.DD 형식
+              match = dateField.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})/);
+              if (match) {
+                const [, y, m, d] = match;
+                dateStr = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+              } else {
+                // YYYYMMDD 형식 (8자리 숫자)
+                match = dateField.match(/^(\d{4})(\d{2})(\d{2})$/);
+                if (match) {
+                  const [, y, m, d] = match;
+                  dateStr = `${y}-${m}-${d}`;
+                }
+              }
+            }
           }
         }
       } else if (typeof dateField === "number") {
@@ -149,6 +195,11 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
         const date = new Date(excelEpoch.getTime() + dateField * 86400000);
         dateStr = date.toISOString().split("T")[0];
       }
+    }
+
+    // 디버깅: 날짜 파싱 결과 로깅 (첫 10개만)
+    if (totalCustomers < 10) {
+      console.log(`POS Row parsing - dateField: ${dateField}, parsed dateStr: ${dateStr}, hour: ${hour}`);
     }
 
     if (!hourlyStats[hour]) {
