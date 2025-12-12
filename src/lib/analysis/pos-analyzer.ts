@@ -28,9 +28,19 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
 
   const dataToAnalyze = jsonData.slice(0, 1000);
 
+  // 첫 번째 행의 컬럼명 확인을 위한 디버깅
+  if (jsonData.length > 0) {
+    console.log("POS Data - First row keys:", Object.keys(jsonData[0]));
+    console.log("POS Data - First row sample:", jsonData[0]);
+  }
+
   for (const row of dataToAnalyze) {
+    // Transaction_Time 및 다양한 시간 컬럼 지원
     let timeField =
-      (row["시간"] ||
+      (row["Transaction_Time"] ||
+        row["transaction_time"] ||
+        row["거래시간"] ||
+        row["시간"] ||
         row["Time"] ||
         row["시간대"] ||
         row["주문시간"] ||
