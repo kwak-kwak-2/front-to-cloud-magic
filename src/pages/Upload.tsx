@@ -81,6 +81,7 @@ const Upload = () => {
       const videoAnalysis = {
         ...createVideoAnalysis(cctvResult),
         dailyFlows: posResult.dailyFlows,
+        dailyRevenues: posResult.dailyRevenues,
       };
 
       // Save analysis results - POS 데이터의 customerFlow 사용

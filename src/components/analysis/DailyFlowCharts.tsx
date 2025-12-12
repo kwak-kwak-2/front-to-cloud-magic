@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "lucide-react";
 
@@ -13,6 +13,18 @@ interface DailyFlowChartsProps {
   data: DailyFlow[];
 }
 
+// 색상 팔레트 생성 (31일치)
+const generateColors = (count: number) => {
+  const colors: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const hue = (i * 360) / count;
+    colors.push(`hsl(${hue}, 70%, 50%)`);
+  }
+  return colors;
+};
+
+const COLORS = generateColors(31);
+
 const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
   const [selectedDate, setSelectedDate] = useState<string>("all");
 
@@ -22,10 +34,10 @@ const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
     return `${date.getMonth() + 1}월 ${date.getDate()}일`;
   };
 
-  // 날짜 포맷팅 함수 (짧은 버전)
-  const formatDateShort = (dateStr: string) => {
+  // 날짜에서 일자만 추출
+  const getDayNumber = (dateStr: string) => {
     const date = new Date(dateStr);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
+    return date.getDate();
   };
 
   // 선택된 날짜에 따라 필터링된 데이터
@@ -39,6 +51,28 @@ const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
   // 정렬된 날짜 목록 (선택 옵션용)
   const sortedDates = useMemo(() => {
     return [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [data]);
+
+  // 전체 보기용 통합 데이터 생성 (모든 날짜를 하나의 차트에)
+  const combinedChartData = useMemo(() => {
+    // 모든 시간대 수집
+    const allHours = new Set<string>();
+    data.forEach(d => {
+      d.hourlyData.forEach(h => allHours.add(h.hour));
+    });
+    
+    const sortedHours = Array.from(allHours).sort();
+    
+    // 각 시간대별로 모든 날짜의 데이터를 포함하는 객체 생성
+    return sortedHours.map(hour => {
+      const hourData: { [key: string]: number | string } = { hour };
+      data.forEach((dailyData, index) => {
+        const dayNum = getDayNumber(dailyData.date);
+        const hourEntry = dailyData.hourlyData.find(h => h.hour === hour);
+        hourData[`day${dayNum}`] = hourEntry?.customers || 0;
+      });
+      return hourData;
+    });
   }, [data]);
 
   if (!data || data.length === 0) {
@@ -64,7 +98,7 @@ const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
           <div>
             <CardTitle>일별 시간대 고객 흐름</CardTitle>
             <CardDescription className="text-xs text-muted-foreground mt-1">
-              POS 데이터 기반 - {selectedDate === "all" ? `${data.length}일간의` : formatDate(selectedDate)} 시간대별 고객 수 추이
+              POS 데이터 기반 - {selectedDate === "all" ? `${data.length}일간 비교` : formatDate(selectedDate)} 시간대별 고객 수 추이
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -74,7 +108,7 @@ const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
                 <SelectValue placeholder="날짜 선택" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">전체 보기</SelectItem>
+                <SelectItem value="all">전체 보기 (비교)</SelectItem>
                 {sortedDates.map((dailyData) => (
                   <SelectItem key={dailyData.date} value={dailyData.date}>
                     {formatDate(dailyData.date)}
@@ -87,53 +121,67 @@ const DailyFlowCharts = ({ data }: DailyFlowChartsProps) => {
       </CardHeader>
       <CardContent>
         {selectedDate === "all" ? (
-          // 전체 보기: 그리드 형태로 작은 차트들
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[800px] overflow-y-auto pr-2">
-            {filteredData.map((dailyData) => (
-              <div
-                key={dailyData.date}
-                className="bg-secondary/30 rounded-lg p-3 border border-border/50 cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => setSelectedDate(dailyData.date)}
-              >
-                <p className="text-sm font-medium text-foreground mb-2">
-                  {formatDateShort(dailyData.date)}
-                </p>
-                <ResponsiveContainer width="100%" height={120}>
-                  <LineChart data={dailyData.hourlyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
-                    <XAxis
-                      dataKey="hour"
-                      tick={{ fontSize: 9 }}
-                      stroke="hsl(var(--muted-foreground))"
-                      tickFormatter={(v) => v.replace(":00", "")}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 9 }}
-                      stroke="hsl(var(--muted-foreground))"
-                      width={25}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "6px",
-                        fontSize: "12px",
-                      }}
-                      formatter={(value: number) => [`${value}명`, "고객"]}
-                      labelFormatter={(label) => `${label}`}
-                    />
+          // 전체 보기: 모든 날짜를 하나의 차트에 오버레이
+          <div className="bg-secondary/30 rounded-lg p-6 border border-border/50">
+            <p className="text-sm font-medium text-muted-foreground mb-4">
+              한 달간 일별 시간대 고객 흐름 비교 (총 {data.length}일)
+            </p>
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={combinedChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.5} />
+                <XAxis
+                  dataKey="hour"
+                  tick={{ fontSize: 11 }}
+                  stroke="hsl(var(--muted-foreground))"
+                  tickFormatter={(v) => v.replace(":00", "시")}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="hsl(var(--muted-foreground))"
+                  width={40}
+                  label={{ value: '고객 수', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    maxHeight: "300px",
+                    overflowY: "auto",
+                  }}
+                  formatter={(value: number, name: string) => {
+                    const dayNum = name.replace("day", "");
+                    return [`${value}명`, `${dayNum}일`];
+                  }}
+                  labelFormatter={(label) => `${label}`}
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: "10px", maxHeight: "60px", overflowY: "auto" }}
+                  formatter={(value: string) => {
+                    const dayNum = value.replace("day", "");
+                    return `${dayNum}일`;
+                  }}
+                />
+                {sortedDates.map((dailyData, index) => {
+                  const dayNum = getDayNumber(dailyData.date);
+                  return (
                     <Line
+                      key={dailyData.date}
                       type="monotone"
-                      dataKey="customers"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ r: 2, fill: "hsl(var(--primary))" }}
+                      dataKey={`day${dayNum}`}
+                      stroke={COLORS[dayNum - 1] || COLORS[index % COLORS.length]}
+                      strokeWidth={1.5}
+                      dot={false}
                       activeDot={{ r: 4 }}
                     />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ))}
+                  );
+                })}
+              </LineChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              특정 날짜를 자세히 보려면 위 드롭다운에서 날짜를 선택하세요
+            </p>
           </div>
         ) : (
           // 특정 날짜 선택: 큰 차트 하나

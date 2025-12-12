@@ -6,6 +6,12 @@ interface DailyFlow {
   hourlyData: { hour: string; customers: number }[];
 }
 
+interface DailyRevenue {
+  date: string;
+  revenue: number;
+  customers: number;
+}
+
 interface AnalysisData {
   peak_hour: string;
   long_stay_rate: number;
@@ -17,6 +23,7 @@ interface AnalysisData {
     stayDistribution?: { name: string; value: number }[];
     seatDistribution?: { name: string; value: number }[];
     dailyFlows?: DailyFlow[];
+    dailyRevenues?: DailyRevenue[];
   };
 }
 
