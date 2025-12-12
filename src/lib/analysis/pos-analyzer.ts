@@ -44,36 +44,54 @@ export const analyzePosData = async (file: File): Promise<PosAnalysisResult> => 
   }
 
   for (const row of dataToAnalyze) {
-    // Transaction_Time 및 다양한 시간 컬럼 지원
+    // Transaction_Time 및 다양한 시간 컬럼 지원 (공백 포함 버전 추가)
     let timeField =
       (row["Transaction_Time"] ||
         row["transaction_time"] ||
+        row["transaction time"] ||
+        row["Transaction Time"] ||
         row["거래시간"] ||
         row["시간"] ||
         row["Time"] ||
+        row["time"] ||
         row["시간대"] ||
         row["주문시간"] ||
         row["OrderTime"] ||
         row["timestamp"]) as unknown;
+    
+    // 매출/금액 컬럼 (cost, Unit Price 추가)
     let revenueField =
-      (row["매출"] ||
+      (row["cost"] ||
+        row["Cost"] ||
+        row["매출"] ||
         row["Revenue"] ||
+        row["revenue"] ||
         row["금액"] ||
         row["Amount"] ||
+        row["amount"] ||
         row["판매금액"] ||
-        row["price"]) as unknown;
+        row["price"] ||
+        row["Price"] ||
+        row["Unit Price"] ||
+        row["unit price"]) as unknown;
+    
     const stayField =
       (row["체류시간"] ||
         row["StayTime"] ||
         row["이용시간"] ||
         row["Duration"] ||
         row["stay_duration"]) as unknown;
-    // 날짜 필드 탐지
+    
+    // 날짜 필드 탐지 (공백 포함 버전 추가)
     let dateField =
-      (row["날짜"] ||
+      (row["transaction date"] ||
+        row["Transaction Date"] ||
+        row["Transaction_Date"] ||
+        row["transaction_date"] ||
+        row["날짜"] ||
         row["Date"] ||
-        row["일자"] ||
-        row["date"]) as unknown;
+        row["date"] ||
+        row["일자"]) as unknown;
 
     // Fallback: 자동으로 시간/매출 컬럼 탐지
     if (timeField == null) {
