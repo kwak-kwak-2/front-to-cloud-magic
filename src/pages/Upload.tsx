@@ -152,49 +152,66 @@ const Upload = () => {
               />
 
               {/* Video Upload Card - Custom styled */}
-              <div className="space-y-2">
-                <label htmlFor="video_file" className="text-sm font-medium flex items-center gap-2">
-                  <Video className="h-4 w-4 text-accent" />
-                  CCTV 영상 파일
-                </label>
-                <div 
-                  className={`relative border-2 border-dashed rounded-lg p-6 transition-all cursor-pointer hover:border-accent/50 ${
-                    videoFile ? 'border-accent bg-accent/5' : 'border-border'
-                  }`}
-                  onClick={() => document.getElementById('video_file')?.click()}
-                >
-                  <input
-                    type="file"
-                    id="video_file"
-                    accept="video/*,.mp4,.avi,.mov,.mkv"
-                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                  />
-                  
-                  <div className="flex flex-col items-center justify-center gap-3">
-                    {videoFile ? (
-                      <>
-                        <CheckCircle className="h-10 w-10 text-accent" />
-                        <div className="text-center">
-                          <p className="font-medium text-foreground">{videoFile.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <UploadIcon className="h-10 w-10 text-muted-foreground" />
-                        <div className="text-center">
-                          <p className="font-medium text-foreground">클릭하여 영상 업로드</p>
-                          <p className="text-sm text-muted-foreground">
-                            .mp4, .avi, .mov, .mkv 형식 지원
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <Video className="h-6 w-6 text-accent" />
+                  <h3 className="text-xl font-semibold">CCTV 영상 파일</h3>
                 </div>
+
+                {videoFile ? (
+                  // 업로드 완료 상태
+                  <div className="border-2 border-success/50 bg-success/5 rounded-lg p-6 transition-all animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-success/20 rounded-full flex items-center justify-center">
+                          <CheckCircle className="h-6 w-6 text-success" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">{videoFile.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {(videoFile.size / (1024 * 1024)).toFixed(2)} MB • 업로드 준비 완료
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => setVideoFile(null)}
+                      >
+                        <span className="sr-only">삭제</span>
+                        ✕
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  // 업로드 전 상태
+                  <div 
+                    className="border-2 border-dashed border-border rounded-lg p-8 hover:border-accent/50 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById('video_file')?.click()}
+                  >
+                    <input
+                      type="file"
+                      id="video_file"
+                      accept="video/*,.mp4,.avi,.mov,.mkv"
+                      onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                    
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center">
+                        <UploadIcon className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <div className="text-center">
+                        <p className="font-medium text-foreground">클릭하여 영상 업로드</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          .mp4, .avi, .mov, .mkv 형식 지원
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground">
                   카페 내부 CCTV 영상 (고객 동선 및 체류 패턴 분석용)
                 </p>
