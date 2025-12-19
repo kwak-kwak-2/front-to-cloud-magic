@@ -85,7 +85,7 @@ const Solution = () => {
               </div>
               <div className="bg-card border rounded-xl p-5 text-center">
                 <Users className="h-8 w-8 text-accent mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground mb-1">장시간 체류율</p>
+                <p className="text-sm text-muted-foreground mb-1">장시간 체류율 (2시간 이상)</p>
                 <p className="text-2xl font-bold text-accent">{longStayRate}%</p>
               </div>
               <div className="bg-card border rounded-xl p-5 text-center">
